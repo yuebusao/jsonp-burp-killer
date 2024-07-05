@@ -5,6 +5,7 @@ import java.io.PrintWriter;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.commons.text.similarity.LevenshteinDistance;
@@ -179,7 +180,8 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender, I
                 IsJsonp++;
             //优先检测jsonp漏洞
             if (IsJsonp > 0 ) {
-                if(!chekJsonp(response1)){
+                String content = chekJsonp(response1);
+                if(content.isEmpty()){
                     return null;
                 }
                 if (response1.contains("squirt1e"))
@@ -234,18 +236,12 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender, I
             }
 
             if (IsCorsControl > 0 && IsCorstrue > 0 ) {
-
-                for (String corsword:corswords_lists) {
-                    if (corsword.equals("*"))  //没用
-                        corsword = "";
-                    if (true)
-                    synchronized (this.Udatas) {
-                        int row = this.Udatas.size();
-                        this.Udatas.add(new TablesData(row, reqMethod, url.toString(), this.helpers.analyzeResponse(newResponse).getStatusCode() + "", "Find Cors vuln", newIHttpRequestResponse, httpService.getHost(), httpService.getPort()));
-                        fireTableRowsInserted(row, row);
-                        List<IScanIssue> issues = new ArrayList<>(1);
-                        return issues;
-                    }
+                synchronized (this.Udatas) {
+                    int row = this.Udatas.size();
+                    this.Udatas.add(new TablesData(row, reqMethod, url.toString(), this.helpers.analyzeResponse(newResponse).getStatusCode() + "", "Find Cors vuln", newIHttpRequestResponse, httpService.getHost(), httpService.getPort()));
+                    fireTableRowsInserted(row, row);
+                    List<IScanIssue> issues = new ArrayList<>(1);
+                    return issues;
                 }
             }
 
@@ -255,9 +251,21 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender, I
 
     }
 
-    public static boolean chekJsonp(String response) {
-        response = response.trim();
-        return Pattern.matches("^\\w+\\((.+?)\\);?$",response);
+    public static String chekJsonp(String response) {
+        Pattern pattern = Pattern.compile("^\\w+\\((.+?)\\);?$");
+        Matcher matcher = pattern.matcher(response);
+        String content = "";
+        if (matcher.find()) { // 确保找到匹配项
+            content = matcher.group(1); // 输出括号内的内容
+        }
+
+        String result = "";
+        Pattern sensitivePattern = Pattern.compile("(user|info|mail|password|phone|secret|uid|name|address|mobile|ssn|account)", Pattern.CASE_INSENSITIVE);
+        Matcher sensitiveMatcher = sensitivePattern.matcher(content);
+        while (sensitiveMatcher.find()) {
+            result = result+sensitiveMatcher.group()+" ";
+        }
+        return result.isEmpty()?content:result;
     }
 
 
