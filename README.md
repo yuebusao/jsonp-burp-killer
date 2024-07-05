@@ -1,7 +1,7 @@
 # jsonp-cors-burp-killer
 #### 简介
 
-大四时写的一款被动扫描检测`jsonp`及`cors`漏洞的`burp`插件，魔改自`https://github.com/YoDiDi/cors-jsonp`。优化了`JSONP`及`CORS`的检测逻辑，在原有基础上降低了`jsonp`漏洞检测误报。
+大四写的一款被动扫描检测`jsonp`及`cors`漏洞的`burp`插件，魔改自`https://github.com/YoDiDi/cors-jsonp`。优化了`JSONP`及`CORS`的检测逻辑，在原有基础上降低了`jsonp`漏洞检测误报。
 
 #### 功能
 
