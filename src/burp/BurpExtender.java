@@ -83,11 +83,11 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender, I
 
                 BurpExtender.this.Rtable.add("cors key words", BurpExtender.this.textArea1);
                 BurpExtender.this.Rtable.add("jsonp key words", BurpExtender.this.textArea2);
-                BurpExtender.this.Rtable.add("text threshold", BurpExtender.this.textArea3);
+                BurpExtender.this.Rtable.add("config", BurpExtender.this.textArea3);
                 BurpExtender.this.textArea1.setText("useless key words.");
                 BurpExtender.this.textArea1.setEnabled(false);
                 BurpExtender.this.textArea2.setText("callback\njsonp\ncb\nm\ni\nfunction");
-                BurpExtender.this.textArea3.setText("0.9");
+                BurpExtender.this.textArea3.setText("thresold: 0.9\njsonpRegex: ^\\w+\\((.+?)\\);?$\nsensitiveInfoRegex: (user|info|mail|password|phone|secret|uid|name|address|mobile|ssn|account)");
                 BurpExtender.this.HjSplitPane.add(BurpExtender.this.Ltable, "left"); // request窗体
                 BurpExtender.this.HjSplitPane.add(BurpExtender.this.Rtable, "right"); // response窗体
                 BurpExtender.this.mjSplitPane.add(BurpExtender.this.UscrollPane, "left"); // 结果集
@@ -105,14 +105,25 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender, I
 
         String corswords = BurpExtender.this.textArea1.getText(); // 关键字读取
         String jsonpwords = BurpExtender.this.textArea2.getText(); // 关键字读取
+        String configWords = BurpExtender.this.textArea3.getText();
+        String[] config_lists = configWords.split("\n");
+        double threshold = 0.9;
+        String jsonpRegex =  "^\\w+\\((.+?)\\);?$";
+        String sensitiveInfoRegex =  "(user|info|mail|password|phone|secret|uid|name|address|mobile|ssn|account)";
+        for(String config : config_lists){
+            if (config.startsWith("threshold")){
+                threshold = Double.parseDouble(config.split(":")[1].trim());
+            } else if (config.startsWith("jsonpRegex")) {
+                jsonpRegex = config.split(":")[1].trim();
+            }else if(config.startsWith("sensitiveInfoRegex")){
+                sensitiveInfoRegex = config.split(":")[1].trim();
+            }
+        }
 
-        double threshold = Double.parseDouble(BurpExtender.this.textArea3.getText().trim()); // 阈值
 
         byte[] request = baseRequestResponse.getRequest();
         URL url = this.helpers.analyzeRequest(baseRequestResponse).getUrl();
         IRequestInfo analyzedIRequestInfo = this.helpers.analyzeRequest(request);
-
-        IResponseInfo analyzedIResponseInfo = this.helpers.analyzeResponse(baseRequestResponse.getResponse());
 
 
         List<String> request_header = analyzedIRequestInfo.getHeaders(); // 获取请求头
@@ -172,19 +183,21 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender, I
 
             /****************获取新的响应包的body******************/
             String response1 = new String(newResponse); //byte[] to String
-
+            IResponseInfo iResponseInfo1 = this.helpers.analyzeResponse(newResponse);
+            int iResponse1BodyOffset = iResponseInfo1.getBodyOffset();
+            String response1Body = response1.substring(iResponse1BodyOffset).trim();
             //        stdout.println(this.helpers.analyzeResponse(newResponse).getHeaders());
             int IsJsonp = 0;
 
-            if (response1.contains("squirt1e"))
+            if (response1Body.contains("squirt1e"))
                 IsJsonp++;
             //优先检测jsonp漏洞
             if (IsJsonp > 0 ) {
-                String content = chekJsonp(response1);
+                String content = chekJsonp(response1Body,jsonpRegex,sensitiveInfoRegex);
                 if(content.isEmpty()){
                     return null;
                 }
-                if (response1.contains("squirt1e"))
+                if (response1Body.contains("squirt1e"))
                     synchronized (this.Udatas) {
                         int row = this.Udatas.size();
 
@@ -196,16 +209,19 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender, I
                             IHttpRequestResponse newIHttpRequestResponse2 = this.callbacks.makeHttpRequest(httpService, newRequest2);
                             byte[] newResponse2 = newIHttpRequestResponse2.getResponse();
                             String response2 = new String(newResponse2);
+                            IResponseInfo iResponseInfo2 = this.helpers.analyzeResponse(newRequest2);
+                            int iResponse2BodyOffset = iResponseInfo2.getBodyOffset();
+                            String response2Body = response2.substring(iResponse2BodyOffset).trim();
 
-                            if(caculateSimilarity(response1,response2,threshold)){
-                                this.Udatas.add(new TablesData(row, reqMethod, url.toString(), this.helpers.analyzeResponse(newResponse).getStatusCode() + "", "Find Jsonp Vuln!!No Referer Limit", newIHttpRequestResponse2, httpService.getHost(), httpService.getPort()));
+                            if(caculateSimilarity(response1Body,response2Body,threshold)){
+                                this.Udatas.add(new TablesData(row, reqMethod, url.toString(), this.helpers.analyzeResponse(newResponse).getStatusCode() + "", "Find Jsonp Vuln!! "+ content, newIHttpRequestResponse2, httpService.getHost(), httpService.getPort()));
                                 fireTableRowsInserted(row, row);
                             }else {
-                                this.Udatas.add(new TablesData(row, reqMethod, url.toString(), this.helpers.analyzeResponse(newResponse).getStatusCode() + "", "Find Jsonp Vuln!!But Referer Limit", newIHttpRequestResponse2, httpService.getHost(), httpService.getPort()));
+                                this.Udatas.add(new TablesData(row, reqMethod, url.toString(), this.helpers.analyzeResponse(newResponse).getStatusCode() + "", "Find Jsonp Vuln!!Referer Limit "+content, newIHttpRequestResponse2, httpService.getHost(), httpService.getPort()));
                                 fireTableRowsInserted(row, row);
                             }
                         }else{
-                            this.Udatas.add(new TablesData(row, reqMethod, url.toString(), this.helpers.analyzeResponse(newResponse).getStatusCode() + "", "Find Jsonp Vuln!!", newIHttpRequestResponse, httpService.getHost(), httpService.getPort()));
+                            this.Udatas.add(new TablesData(row, reqMethod, url.toString(), this.helpers.analyzeResponse(newResponse).getStatusCode() + "", "Find Jsonp Vuln!!"+content, newIHttpRequestResponse, httpService.getHost(), httpService.getPort()));
                             fireTableRowsInserted(row, row);
                         }
 
@@ -251,8 +267,8 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender, I
 
     }
 
-    public static String chekJsonp(String response) {
-        Pattern pattern = Pattern.compile("^\\w+\\((.+?)\\);?$");
+    public static String chekJsonp(String response,String jsonpRegex,String sensitiveInfoRegex) {
+        Pattern pattern = Pattern.compile(jsonpRegex);
         Matcher matcher = pattern.matcher(response);
         String content = "";
         if (matcher.find()) { // 确保找到匹配项
@@ -260,10 +276,10 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender, I
         }
 
         String result = "";
-        Pattern sensitivePattern = Pattern.compile("(user|info|mail|password|phone|secret|uid|name|address|mobile|ssn|account)", Pattern.CASE_INSENSITIVE);
+        Pattern sensitivePattern = Pattern.compile(sensitiveInfoRegex, Pattern.CASE_INSENSITIVE);
         Matcher sensitiveMatcher = sensitivePattern.matcher(content);
         while (sensitiveMatcher.find()) {
-            result = result+sensitiveMatcher.group()+" ";
+            result = result + sensitiveMatcher.group()+" ";
         }
         return result.isEmpty()?content:result;
     }
