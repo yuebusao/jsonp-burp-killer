@@ -209,8 +209,7 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender, I
                         int row = this.Udatas.size();
                         boolean isSensitiveContent = content.startsWith("sensitive:");
                         //修改Referer头检测
-                        if(request_header.contains("Referer:")){
-                            request_header.removeIf(header -> header.startsWith("Referer"));
+                        if(request_header.removeIf(header -> header.startsWith("Referer:"))){
                             request_header.add("Referer: test.top"); // 替换请求头
                             byte[] newRequest2 = this.helpers.buildHttpMessage(request_header, request_bodys);
                             IHttpRequestResponse newIHttpRequestResponse2 = this.callbacks.makeHttpRequest(httpService, newRequest2);
@@ -234,7 +233,7 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender, I
                             }else {
                                 if(onlySensitiveJSONP) {
                                     if (isSensitiveContent) {
-                                        this.Udatas.add(new TablesData(row, reqMethod, url.toString(), this.helpers.analyzeResponse(newResponse).getStatusCode() + "", "Find Jsonp Vuln!!" + content, newIHttpRequestResponse, httpService.getHost(), httpService.getPort()));
+                                        this.Udatas.add(new TablesData(row, reqMethod, url.toString(), this.helpers.analyzeResponse(newResponse).getStatusCode() + "", "Find Jsonp Vuln!!Referer Limit " + content, newIHttpRequestResponse, httpService.getHost(), httpService.getPort()));
                                         fireTableRowsInserted(row, row);
                                     }
                                 }else {
